@@ -3,7 +3,10 @@
   <component name="DesignSurface">
     <option name="filePathToZoomLevelMap">
       <map>
-        <entry key="..\:/02_NGODING/LiveAttendance/app/src/main/res/layout/activity_splash.xml" value="0.25" />
+        <entry key="..\:/02_NGODING/LiveAttendance/app/src/main/res/drawable/bg_button_primary.xml" value="0.2942708333333333" />
+        <entry key="..\:/02_NGODING/LiveAttendance/app/src/main/res/drawable/bg_edit_text.xml" value="0.2942708333333333" />
+        <entry key="..\:/02_NGODING/LiveAttendance/app/src/main/res/layout/activity_login.xml" value="0.33" />
+        <entry key="..\:/02_NGODING/LiveAttendance/app/src/main/res/layout/activity_splash.xml" value="0.22" />
       </map>
     </option>
   </component>
