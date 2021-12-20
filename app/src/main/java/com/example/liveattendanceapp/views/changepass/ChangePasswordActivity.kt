@@ -15,6 +15,7 @@ class ChangePasswordActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         init()
+        onClick()
     }
 
     private fun onClick() {
