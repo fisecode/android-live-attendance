@@ -26,4 +26,6 @@
     <string name="please_field_your_password">Please field your password</string>
     <string name="failed">Failed</string>
     <string name="success">Success</string>
+    <string name="not_granted">Not Granted</string>
+    <string name="required_permission">Required Permission</string>
 </resources>
