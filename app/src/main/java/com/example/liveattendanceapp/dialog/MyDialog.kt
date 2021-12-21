@@ -6,7 +6,7 @@ import android.content.Context
 import android.view.LayoutInflater
 import com.example.liveattendanceapp.R
 
-class MyDialog {
+object MyDialog {
 
     private var dialogBuilder: AlertDialog? = null
 
