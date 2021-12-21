@@ -51,7 +51,7 @@ class LoginActivity : AppCompatActivity() {
     private fun loginToServer(email: String, password: String) {
         val loginRequest = LoginRequest(email = email, password = password, deviceName = "mobile")
         val loginRequestString = Gson().toJson(loginRequest)
-        MyDialog().showProgressDialog(this)
+        MyDialog.showProgressDialog(this)
 
         ApiServices.getLiveAttendanceServices()
             .loginRequest(loginRequestString)
@@ -60,7 +60,7 @@ class LoginActivity : AppCompatActivity() {
                     call: Call<LoginResponse>,
                     response: Response<LoginResponse>
                 ) {
-                    MyDialog().hideDialog()
+                    MyDialog.hideDialog()
                     if (response.isSuccessful){
                         val user = response.body()?.user
                         val token = response.body()?.meta?.token
@@ -81,7 +81,7 @@ class LoginActivity : AppCompatActivity() {
                         try {
                             response.errorBody()?.let {
                                 errorResponse = errorConverter.convert(it)
-                                MyDialog().dynamicDialog(
+                                MyDialog.dynamicDialog(
                                     this@LoginActivity,
                                     getString(R.string.failed),
                                     errorResponse?.message.toString()
@@ -91,12 +91,12 @@ class LoginActivity : AppCompatActivity() {
                             e.printStackTrace()
                             Log.e(TAG, "Error: ${e.message}")
                         }
-                        MyDialog().hideDialog()
+
                     }
                 }
 
                 override fun onFailure(call: Call<LoginResponse>, t: Throwable) {
-                    MyDialog().hideDialog()
+                    MyDialog.hideDialog()
                     Log.e(TAG, "Error: ${t.message}")
                 }
 
