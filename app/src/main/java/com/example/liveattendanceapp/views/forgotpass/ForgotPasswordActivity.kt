@@ -2,7 +2,23 @@ package com.example.liveattendanceapp.views.forgotpass
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.util.Patterns
+import com.example.liveattendanceapp.R
 import com.example.liveattendanceapp.databinding.ActivityForgotPasswordBinding
+import com.example.liveattendanceapp.dialog.MyDialog
+import com.example.liveattendanceapp.model.ForgotPasswordRespone
+import com.example.liveattendanceapp.networking.ApiServices
+import com.example.liveattendanceapp.networking.RetrofitClient
+import com.google.gson.Gson
+import okhttp3.ResponseBody
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Converter
+import retrofit2.Response
+import java.io.IOException
 
 class ForgotPasswordActivity : AppCompatActivity() {
 
@@ -21,10 +37,93 @@ class ForgotPasswordActivity : AppCompatActivity() {
         binding.tbForgotPassword.setNavigationOnClickListener {
             finish()
         }
+
+        binding.btnForgotPassword.setOnClickListener {
+            val email = binding.etEmailForgotPassword.text.toString()
+            if (isFormValid(email)){
+                forgotPassToServer(email)
+            }
+        }
+    }
+
+    private fun forgotPassToServer(email: String) {
+        val forgotPasswordRequest = ForgotPasswordRequest(email = email)
+        val forgotPasswordRequestString = Gson().toJson(forgotPasswordRequest)
+
+        MyDialog.showProgressDialog(this)
+
+        ApiServices.getLiveAttendanceServices()
+            .forgotPasswordRequest(forgotPasswordRequestString)
+            .enqueue(object : Callback<ForgotPasswordRespone>{
+                override fun onResponse(
+                    call: Call<ForgotPasswordRespone>,
+                    response: Response<ForgotPasswordRespone>
+                ) {
+                    MyDialog.hideDialog()
+                    if (response.isSuccessful){
+                        val message = response.body()?.message
+                        MyDialog.dynamicDialog(
+                            this@ForgotPasswordActivity,
+                            getString(R.string.success),
+                            message.toString()
+                        )
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            MyDialog.hideDialog()
+                            finish()
+                        }, 2000)
+                    }else{
+                        val errorConverter: Converter<ResponseBody, ForgotPasswordRespone> =
+                            RetrofitClient
+                                .getClient()
+                                .responseBodyConverter(
+                                    ForgotPasswordRespone::class.java,
+                                    arrayOfNulls<Annotation>(0)
+                                )
+                        var errorResponse: ForgotPasswordRespone?
+                        try {
+                            response.errorBody()?.let {
+                                errorResponse = errorConverter.convert(it)
+                                MyDialog.dynamicDialog(
+                                    this@ForgotPasswordActivity,
+                                    getString(R.string.failed),
+                                    errorResponse?.message.toString()
+                                )
+                            }
+                        }catch (e: IOException){
+                            e.printStackTrace()
+                            Log.e(TAG, "Error: ${e.message}")
+                        }
+                    }
+                }
+
+                override fun onFailure(call: Call<ForgotPasswordRespone>, t: Throwable) {
+                    MyDialog.hideDialog()
+                    Log.e(TAG, "Error: ${t.message}")
+                }
+
+            })
+    }
+
+    private fun isFormValid(email: String): Boolean {
+        if (email.isEmpty()){
+            binding.etEmailForgotPassword.error = getString(R.string.please_field_your_email)
+            binding.etEmailForgotPassword.requestFocus()
+        }else if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()){
+            binding.etEmailForgotPassword.error = getString(R.string.please_use_valid_email)
+            binding.etEmailForgotPassword.requestFocus()
+        }else{
+            binding.etEmailForgotPassword.error = null
+            return true
+        }
+        return false
     }
 
     private fun init() {
         setSupportActionBar(binding.tbForgotPassword)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
+    }
+
+    companion object{
+        private  val TAG = ForgotPasswordActivity::class.java.simpleName
     }
 }
