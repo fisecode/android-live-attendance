@@ -1,16 +1,22 @@
 package com.example.liveattendanceapp.views.attendance
 
 import android.Manifest
+import android.content.Context.LOCATION_SERVICE
+import android.content.IntentSender
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.os.Bundle
+import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import com.example.liveattendanceapp.R
+import com.example.liveattendanceapp.databinding.BottomSheetAttendanceBinding
 import com.example.liveattendanceapp.databinding.FragmentAttendanceBinding
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
@@ -18,10 +24,18 @@ import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.LatLng
 import com.example.liveattendanceapp.dialog.MyDialog
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.ResolvableApiException
+import com.google.android.gms.location.*
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 
 
 class AttendanceFragment : Fragment(), OnMapReadyCallback {
 
+    companion object{
+        private const val REQUEST_CODE_LOCATION = 2000
+        private val TAG = AttendanceFragment::class.java.simpleName
+    }
 
     private val mapPermissions = arrayOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -30,7 +44,13 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
 
     private var mapAttendance: SupportMapFragment? = null
     private var map: GoogleMap? = null
+    private var locationManager: LocationManager? = null
+    private var locationRequest: LocationRequest? = null
+    private var locationSettingsRequest : LocationSettingsRequest? = null
+    private var settingsClient: SettingsClient? = null
     private var binding: FragmentAttendanceBinding? = null
+    private var bindingBottomSheet: BottomSheetAttendanceBinding? = null
+    private lateinit var bottomSheetBehavior: BottomSheetBehavior<ConstraintLayout>
     private lateinit var checkLocationPermission: ActivityResultLauncher<Array<String>>
 
     override fun onCreateView(
@@ -38,6 +58,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         savedInstanceState: Bundle?
     ): View? {
         binding = FragmentAttendanceBinding.inflate(inflater, container, false)
+        bindingBottomSheet = binding?.layoutBottomSheet
         return binding?.root
     }
 
@@ -49,11 +70,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupMaps()
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
+        init()
         checkLocationPermission = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()) {
             if (checkPermission()) {
@@ -63,7 +80,26 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
                 MyDialog.dynamicDialog(context, getString(R.string.required_permission), message)
             }
         }
+
     }
+
+
+    private fun init() {
+        //Setup Location
+        locationManager = context?.getSystemService(LOCATION_SERVICE) as LocationManager
+        settingsClient = LocationServices.getSettingsClient(requireContext())
+        locationRequest = LocationRequest.create()
+            .setInterval(10000)
+            .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
+
+        val builder =  LocationSettingsRequest.Builder().addLocationRequest(locationRequest!!)
+        locationSettingsRequest = builder.build()
+
+        //Setup BottomSheet
+        bottomSheetBehavior = BottomSheetBehavior.from(bindingBottomSheet!!.bottomSheetAttendance)
+        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+    }
+
     private fun setupMaps() {
         mapAttendance = childFragmentManager.findFragmentById(R.id.map_attendance) as SupportMapFragment
         mapAttendance?.getMapAsync(this)
@@ -83,7 +119,47 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
     }
 
     private fun goToCurrentLocation() {
+        if (checkPermission()){
+            if (isLocationEnabled()){
+                return
+            }else{
+                goToTurnOnGps()
+            }
 
+        }else {
+            checkLocationPermission.launch(mapPermissions)
+        }
+    }
+
+    private fun goToTurnOnGps() {
+        val locationSettingsRequest = LocationSettingsRequest.Builder().addLocationRequest(locationRequest!!).build()
+        settingsClient?.checkLocationSettings(locationSettingsRequest)
+            ?.addOnSuccessListener {
+                goToCurrentLocation()
+            }?.addOnFailureListener{
+                when((it as ApiException).statusCode){
+                    LocationSettingsStatusCodes.RESOLUTION_REQUIRED -> {
+                        try {
+                            val resolvableApiException = it as ResolvableApiException
+                            resolvableApiException.startResolutionForResult(
+                                requireActivity(),
+                                REQUEST_CODE_LOCATION
+                            )
+                        } catch (ex: IntentSender.SendIntentException){
+                            ex.printStackTrace()
+                            Log.e(TAG, "Error: ${ex.message}")
+                        }
+                    }
+                }
+            }
+    }
+
+    private fun isLocationEnabled(): Boolean {
+        if (locationManager?.isProviderEnabled(LocationManager.GPS_PROVIDER)!! ||
+                locationManager?.isProviderEnabled(LocationManager.NETWORK_PROVIDER)!!){
+            return true
+        }
+        return false
     }
 
     private fun checkPermission(): Boolean {
