@@ -1,11 +1,14 @@
 package com.example.liveattendanceapp.views.attendance
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context.LOCATION_SERVICE
 import android.content.IntentSender
 import android.content.pm.PackageManager
+import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
+import android.os.Looper
 import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
@@ -42,12 +45,18 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         Manifest.permission.ACCESS_COARSE_LOCATION
     )
 
+    //Config Maps
     private var mapAttendance: SupportMapFragment? = null
     private var map: GoogleMap? = null
     private var locationManager: LocationManager? = null
     private var locationRequest: LocationRequest? = null
     private var locationSettingsRequest : LocationSettingsRequest? = null
     private var settingsClient: SettingsClient? = null
+    private var currentLocation: Location? = null
+    private val locationCallback: LocationCallback? = null
+    private var fusedLocationProviderClient: FusedLocationProviderClient? = null
+
+    //UI
     private var binding: FragmentAttendanceBinding? = null
     private var bindingBottomSheet: BottomSheetAttendanceBinding? = null
     private lateinit var bottomSheetBehavior: BottomSheetBehavior<ConstraintLayout>
@@ -62,15 +71,24 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         return binding?.root
     }
 
+    override fun onDestroyView() {
+        super.onDestroyView()
+        binding = null
+        bindingBottomSheet = null
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        binding = null
+        if (currentLocation != null && locationCallback != null){
+            fusedLocationProviderClient?.removeLocationUpdates(locationCallback)
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupMaps()
         init()
+        onClick()
         checkLocationPermission = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()) {
             if (checkPermission()) {
@@ -80,16 +98,22 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
                 MyDialog.dynamicDialog(context, getString(R.string.required_permission), message)
             }
         }
-
     }
 
+    private fun onClick() {
+        binding?.fabGetCurrentLocation?.setOnClickListener {
+            goToCurrentLocation()
+        }
+    }
 
     private fun init() {
         //Setup Location
         locationManager = context?.getSystemService(LOCATION_SERVICE) as LocationManager
         settingsClient = LocationServices.getSettingsClient(requireContext())
+        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(requireContext())
         locationRequest = LocationRequest.create()
             .setInterval(10000)
+            .setFastestInterval(10000)
             .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
 
         val builder =  LocationSettingsRequest.Builder().addLocationRequest(locationRequest!!)
@@ -118,10 +142,41 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun goToCurrentLocation() {
         if (checkPermission()){
             if (isLocationEnabled()){
-                return
+                map?.isMyLocationEnabled = true
+                map?.uiSettings?.isMyLocationButtonEnabled = false
+
+                val locationCallback = object : LocationCallback() {
+                    override fun onLocationResult(locationResult: LocationResult) {
+                        super.onLocationResult(locationResult)
+                        currentLocation = locationResult.lastLocation
+
+                        if (currentLocation != null) {
+                            val latitude = currentLocation?.latitude
+                            val longitude = currentLocation?.longitude
+
+                            if (latitude != null && longitude != null) {
+                                val latLng = LatLng(latitude, longitude)
+                                map?.moveCamera(CameraUpdateFactory.newLatLng(latLng))
+                                map?.animateCamera(CameraUpdateFactory.zoomTo(20F))
+                            }
+                        }
+                    }
+                }
+                val locationRequest = LocationRequest.create()
+                    .setInterval(10000)
+                    .setFastestInterval(10000)
+                    .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
+                Looper.myLooper()?.let {
+                    fusedLocationProviderClient?.requestLocationUpdates(
+                        locationRequest,
+                        locationCallback,
+                        it
+                    )
+                }
             }else{
                 goToTurnOnGps()
             }
