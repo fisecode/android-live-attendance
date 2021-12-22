@@ -28,4 +28,5 @@
     <string name="success">Success</string>
     <string name="not_granted">Not Granted</string>
     <string name="required_permission">Required Permission</string>
+    <string name="allow_location_permission">Allow Location Permission</string>
 </resources>
