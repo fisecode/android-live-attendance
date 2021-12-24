@@ -31,4 +31,6 @@
     <string name="allow_location_permission">Allow Location Permission</string>
     <string name="search_your_location">Search your location...</string>
     <string name="allow_camera_permission">Allow Camera Permission</string>
+    <string name="failed_to_capture_image">Failed to Capture Image</string>
+    <string name="allow_storage_permission">Allow Storage Permission</string>
 </resources>
