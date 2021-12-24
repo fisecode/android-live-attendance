@@ -1,11 +1,12 @@
 package com.example.liveattendanceapp.networking
 
+import com.example.liveattendanceapp.model.AttendanceResponse
 import com.example.liveattendanceapp.model.ForgotPasswordRespone
 import com.example.liveattendanceapp.model.LoginResponse
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Call
-import retrofit2.http.Body
-import retrofit2.http.Headers
-import retrofit2.http.POST
+import retrofit2.http.*
 
 interface LiveAttendanceApiServices {
 
@@ -16,4 +17,12 @@ interface LiveAttendanceApiServices {
     @Headers("Accept: application/json", "Content-Type: application/json")
     @POST("auth/password/forgot")
     fun forgotPasswordRequest(@Body body: String): Call<ForgotPasswordRespone>
+
+    @Multipart
+    @Headers("Accept: application/json")
+    @POST("attendance")
+    fun attend(@Header("Authorization") token: String,
+               @PartMap params: HashMap<String, RequestBody>,
+               @Part photo: MultipartBody.Part
+    ): Call<AttendanceResponse>
 }

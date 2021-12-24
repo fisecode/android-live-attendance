@@ -33,4 +33,12 @@
     <string name="allow_camera_permission">Allow Camera Permission</string>
     <string name="failed_to_capture_image">Failed to Capture Image</string>
     <string name="allow_storage_permission">Allow Storage Permission</string>
+    <string name="alert">Alert</string>
+    <string name="please_take_your_photo">Please take your photo!</string>
+    <string name="are_you_sure">Are you sure?</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="success_check_in">Success Check In</string>
+    <string name="success_check_out">Success Check Out</string>
+    <string name="something_wrong">Something Wrong</string>
 </resources>
