@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context.LOCATION_SERVICE
 import android.content.IntentSender
 import android.content.pm.PackageManager
+import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
@@ -31,6 +32,7 @@ import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.*
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import java.util.*
 
 
 class AttendanceFragment : Fragment(), OnMapReadyCallback {
@@ -144,6 +146,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
 
     @SuppressLint("MissingPermission")
     private fun goToCurrentLocation() {
+        bindingBottomSheet?.tvCurrentLocation?.text = getString(R.string.search_your_location)
         if (checkPermission()){
             if (isLocationEnabled()){
                 map?.isMyLocationEnabled = true
@@ -162,6 +165,11 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
                                 val latLng = LatLng(latitude, longitude)
                                 map?.moveCamera(CameraUpdateFactory.newLatLng(latLng))
                                 map?.animateCamera(CameraUpdateFactory.zoomTo(20F))
+
+                                val address = getAddress(latitude, longitude)
+                                if  (address != null && address.isNotEmpty()){
+                                    bindingBottomSheet?.tvCurrentLocation?.text = address
+                                }
                             }
                         }
                     }
@@ -184,6 +192,20 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         }else {
             checkLocationPermission.launch(mapPermissions)
         }
+    }
+
+    private fun getAddress(latitude: Double, longitude: Double): String? {
+        val result: String
+        context?.let {
+            val geocode = Geocoder(it, Locale.getDefault())
+            val address = geocode.getFromLocation(latitude, longitude, 1)
+
+            if (address.size > 0){
+                result = address[0].getAddressLine(0)
+                return result
+            }
+        }
+        return null
     }
 
     private fun goToTurnOnGps() {
