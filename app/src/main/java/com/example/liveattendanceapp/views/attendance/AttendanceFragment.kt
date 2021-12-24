@@ -15,7 +15,6 @@ import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
@@ -39,6 +38,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
 
     companion object{
         private const val REQUEST_CODE_LOCATION = 2000
+        private const val REQUEST_CODE_CAMERA_PERMISSIONS = 1001
         private val TAG = AttendanceFragment::class.java.simpleName
     }
 
@@ -47,22 +47,47 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         Manifest.permission.ACCESS_COARSE_LOCATION
     )
 
+    private val cameraPermissions = arrayOf(
+        Manifest.permission.CAMERA,
+        Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE
+    )
+
     //Config Maps
     private var mapAttendance: SupportMapFragment? = null
     private var map: GoogleMap? = null
     private var locationManager: LocationManager? = null
-    private var locationRequest: LocationRequest? = null
-    private var locationSettingsRequest : LocationSettingsRequest? = null
+    private lateinit var locationRequest: LocationRequest
+    private lateinit var locationSettingsRequest : LocationSettingsRequest
     private var settingsClient: SettingsClient? = null
     private var currentLocation: Location? = null
-    private val locationCallback: LocationCallback? = null
-    private var fusedLocationProviderClient: FusedLocationProviderClient? = null
+    private lateinit var locationCallback: LocationCallback
+    private lateinit var fusedLocationProviderClient: FusedLocationProviderClient
 
     //UI
     private var binding: FragmentAttendanceBinding? = null
     private var bindingBottomSheet: BottomSheetAttendanceBinding? = null
     private lateinit var bottomSheetBehavior: BottomSheetBehavior<ConstraintLayout>
-    private lateinit var checkLocationPermission: ActivityResultLauncher<Array<String>>
+
+    private var checkLocationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()) {
+        if (checkPermission()) {
+            setupMaps()
+        } else {
+            val message = getString(R.string.allow_location_permission)
+            MyDialog.dynamicDialog(context, getString(R.string.required_permission), message)
+        }
+    }
+
+    private var checkCameraPermission = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()) {
+        if (checkPermissionCamera()) {
+            openCamera()
+        } else {
+            val message = getString(R.string.allow_camera_permission)
+            MyDialog.dynamicDialog(context, getString(R.string.required_permission), message)
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -77,35 +102,43 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         super.onDestroyView()
         binding = null
         bindingBottomSheet = null
+        stopLocationUpdates()
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        if (currentLocation != null && locationCallback != null){
-            fusedLocationProviderClient?.removeLocationUpdates(locationCallback)
-        }
-    }
+//    override fun onDestroy() {
+//        super.onDestroy()
+//        if (currentLocation != null){
+//            fusedLocationProviderClient.removeLocationUpdates(locationCallback)
+//        }
+//    }
+//
+//    override fun onPause() {
+//        super.onPause()
+//        stopLocationUpdates()
+//    }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupMaps()
         init()
         onClick()
-        checkLocationPermission = registerForActivityResult(
-            ActivityResultContracts.RequestMultiplePermissions()) {
-            if (checkPermission()) {
-                setupMaps()
-            } else {
-                val message = getString(R.string.allow_location_permission)
-                MyDialog.dynamicDialog(context, getString(R.string.required_permission), message)
-            }
-        }
     }
 
     private fun onClick() {
         binding?.fabGetCurrentLocation?.setOnClickListener {
             goToCurrentLocation()
         }
+
+        bindingBottomSheet?.ivCapturePhoto?.setOnClickListener {
+            if (checkPermissionCamera()){
+                openCamera()
+            }else{
+                setRequestPermissionCamera()
+            }
+        }
+    }
+
+    private fun openCamera() {
     }
 
     private fun init() {
@@ -118,7 +151,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
             .setFastestInterval(10000)
             .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
 
-        val builder =  LocationSettingsRequest.Builder().addLocationRequest(locationRequest!!)
+        val builder =  LocationSettingsRequest.Builder().addLocationRequest(locationRequest)
         locationSettingsRequest = builder.build()
 
         //Setup BottomSheet
@@ -144,6 +177,14 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         }
     }
 
+    private fun stopLocationUpdates() {
+        fusedLocationProviderClient.removeLocationUpdates(locationCallback)
+    }
+
+    private fun setRequestPermissionCamera() {
+        checkCameraPermission.launch(cameraPermissions)
+    }
+
     @SuppressLint("MissingPermission")
     private fun goToCurrentLocation() {
         bindingBottomSheet?.tvCurrentLocation?.text = getString(R.string.search_your_location)
@@ -152,7 +193,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
                 map?.isMyLocationEnabled = true
                 map?.uiSettings?.isMyLocationButtonEnabled = false
 
-                val locationCallback = object : LocationCallback() {
+                locationCallback = object : LocationCallback() {
                     override fun onLocationResult(locationResult: LocationResult) {
                         super.onLocationResult(locationResult)
                         currentLocation = locationResult.lastLocation
@@ -174,12 +215,8 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
                         }
                     }
                 }
-                val locationRequest = LocationRequest.create()
-                    .setInterval(10000)
-                    .setFastestInterval(10000)
-                    .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
                 Looper.myLooper()?.let {
-                    fusedLocationProviderClient?.requestLocationUpdates(
+                    fusedLocationProviderClient.requestLocationUpdates(
                         locationRequest,
                         locationCallback,
                         it
@@ -209,7 +246,6 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
     }
 
     private fun goToTurnOnGps() {
-        val locationSettingsRequest = LocationSettingsRequest.Builder().addLocationRequest(locationRequest!!).build()
         settingsClient?.checkLocationSettings(locationSettingsRequest)
             ?.addOnSuccessListener {
                 goToCurrentLocation()
@@ -247,5 +283,15 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
             }
         }
         return  isHasPermission
+    }
+
+    private fun checkPermissionCamera(): Boolean {
+        var isHasPermission = false
+        context?.let {
+            for (permission in cameraPermissions){
+                isHasPermission = ActivityCompat.checkSelfPermission(it, permission) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        return isHasPermission
     }
 }
