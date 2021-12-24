@@ -3,6 +3,7 @@ package com.example.liveattendanceapp.views.attendance
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity.RESULT_OK
+import android.app.AlertDialog
 import android.content.Context.LOCATION_SERVICE
 import android.content.Intent
 import android.content.IntentSender
@@ -23,6 +24,7 @@ import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.example.liveattendanceapp.BuildConfig
 import com.example.liveattendanceapp.R
@@ -34,11 +36,21 @@ import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.LatLng
 import com.example.liveattendanceapp.dialog.MyDialog
+import com.example.liveattendanceapp.hawkstorage.HawkStorage
+import com.example.liveattendanceapp.model.AttendanceResponse
+import com.example.liveattendanceapp.networking.ApiServices
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.*
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.jetbrains.anko.toast
+import retrofit2.Call
+import retrofit2.Response
 import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
@@ -79,6 +91,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
     private var bindingBottomSheet: BottomSheetAttendanceBinding? = null
     private lateinit var bottomSheetBehavior: BottomSheetBehavior<ConstraintLayout>
     private var currentPhotoPath = ""
+    private var isCheckIn = false
 
     private var checkLocationPermission = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()) {
@@ -153,6 +166,107 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
                 setRequestPermissionCamera()
             }
         }
+
+        bindingBottomSheet?.btnCheckIn?.setOnClickListener {
+            val token = HawkStorage.instance(context).getToken()
+            if (checkValidation()){
+                if (isCheckIn){
+                    AlertDialog.Builder(context)
+                        .setTitle(getString(R.string.are_you_sure))
+                        .setPositiveButton(getString(R.string.yes)){ _ , _ ->
+                            sendDataAttendance(token, "out")
+                        }
+                        .setNegativeButton(getString(R.string.no)){dialog, _ ->
+                            dialog.dismiss()
+                        }
+                        .show()
+                }else{
+                    AlertDialog.Builder(context)
+                        .setTitle(getString(R.string.are_you_sure))
+                        .setPositiveButton(getString(R.string.yes)){ _ , _ ->
+                            sendDataAttendance(token, "in")
+                        }
+                        .setNegativeButton(getString(R.string.no)){dialog, _ ->
+                            dialog.dismiss()
+                        }
+                        .show()
+                }
+            }
+        }
+    }
+
+    private fun sendDataAttendance(token: String, type: String) {
+        val params = HashMap<String, RequestBody>()
+        MyDialog.showProgressDialog(context)
+        if (currentLocation != null && currentPhotoPath.isNotEmpty()){
+            val latitude = currentLocation?.latitude.toString()
+            val longitude = currentLocation?.longitude.toString()
+            val address = bindingBottomSheet?.tvCurrentLocation?.text.toString()
+
+            val file = File(currentPhotoPath)
+            val uri = FileProvider.getUriForFile(
+                requireContext(),
+                BuildConfig.APPLICATION_ID + ".fileprovider",
+                file
+            )
+            val typeFile = context?.contentResolver?.getType(uri)
+
+            val mediaTypeText = MultipartBody.FORM
+            val mediaTypeFile = typeFile?.toMediaType()
+
+            val requestLatitude = latitude.toRequestBody(mediaTypeText)
+            val requestLongitude = longitude.toRequestBody(mediaTypeText)
+            val requestAddress = address.toRequestBody(mediaTypeText)
+            val requestType = type.toRequestBody(mediaTypeText)
+
+            params["lat"] = requestLatitude
+            params["long"] = requestLongitude
+            params["address"] = requestAddress
+            params["type"] = requestType
+
+            val requestPhotoFile = file.asRequestBody(mediaTypeFile)
+            val multipartBody = MultipartBody.Part.createFormData("photo", file.name, requestPhotoFile)
+            ApiServices.getLiveAttendanceServices()
+                .attend("Bearer $token", params, multipartBody)
+                .enqueue(object : retrofit2.Callback<AttendanceResponse> {
+                    override fun onResponse(
+                        call: Call<AttendanceResponse>,
+                        response: Response<AttendanceResponse>
+                    ) {
+                        MyDialog.hideDialog()
+                        if (response.isSuccessful){
+                            val attendanceResponse = response.body()
+                            currentPhotoPath = ""
+                            bindingBottomSheet?.ivCapturePhoto?.setImageDrawable(
+                                ContextCompat.getDrawable(context!!, R.drawable.ic_baseline_add_circle_24)
+                            )
+                            bindingBottomSheet?.ivCapturePhoto?.adjustViewBounds = false
+
+                            if (type == "in"){
+                                MyDialog.dynamicDialog(context, getString(R.string.success_check_in), attendanceResponse?.message.toString())
+                            }else{
+                                MyDialog.dynamicDialog(context, getString(R.string.success_check_out), attendanceResponse?.message.toString())
+                            }
+                        }else{
+                            MyDialog.dynamicDialog(context, getString(R.string.alert), getString(R.string.something_wrong))
+                        }
+                    }
+
+                    override fun onFailure(call: Call<AttendanceResponse>, t: Throwable) {
+                        MyDialog.hideDialog()
+                        Log.e(TAG, "Error: ${t.message}")
+                    }
+
+                })
+        }
+    }
+
+    private fun checkValidation(): Boolean {
+        if (currentPhotoPath.isEmpty()){
+            MyDialog.dynamicDialog(context, getString(R.string.alert), getString(R.string.please_take_your_photo))
+            return false
+        }
+        return true
     }
 
     private fun deletePhoto(){
