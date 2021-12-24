@@ -2,14 +2,19 @@ package com.example.liveattendanceapp.views.attendance
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity.RESULT_OK
 import android.content.Context.LOCATION_SERVICE
+import android.content.Intent
 import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.os.Looper
+import android.provider.MediaStore
 import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
@@ -18,6 +23,8 @@ import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
+import androidx.core.content.FileProvider
+import com.example.liveattendanceapp.BuildConfig
 import com.example.liveattendanceapp.R
 import com.example.liveattendanceapp.databinding.BottomSheetAttendanceBinding
 import com.example.liveattendanceapp.databinding.FragmentAttendanceBinding
@@ -31,6 +38,10 @@ import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.*
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import org.jetbrains.anko.toast
+import java.io.File
+import java.io.IOException
+import java.text.SimpleDateFormat
 import java.util.*
 
 
@@ -39,6 +50,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
     companion object{
         private const val REQUEST_CODE_LOCATION = 2000
         private const val REQUEST_CODE_CAMERA_PERMISSIONS = 1001
+        private const val REQUEST_CODE_IMAGE_CAPTURE = 1000
         private val TAG = AttendanceFragment::class.java.simpleName
     }
 
@@ -68,6 +80,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
     private var binding: FragmentAttendanceBinding? = null
     private var bindingBottomSheet: BottomSheetAttendanceBinding? = null
     private lateinit var bottomSheetBehavior: BottomSheetBehavior<ConstraintLayout>
+    private var currentPhotoPath = ""
 
     private var checkLocationPermission = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()) {
@@ -84,7 +97,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         if (checkPermissionCamera()) {
             openCamera()
         } else {
-            val message = getString(R.string.allow_camera_permission)
+            val message = getString(R.string.allow_camera_permission) + "\n" + getString(R.string.allow_storage_permission)
             MyDialog.dynamicDialog(context, getString(R.string.required_permission), message)
         }
     }
@@ -124,6 +137,26 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         onClick()
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_IMAGE_CAPTURE){
+            if (resultCode == RESULT_OK){
+                if (currentPhotoPath.isNotEmpty()){
+                    val uri = Uri.parse(currentPhotoPath)
+                    bindingBottomSheet?.ivCapturePhoto?.setImageURI(uri)
+                    bindingBottomSheet?.ivCapturePhoto?.adjustViewBounds = true
+                }
+            }else{
+                if (currentPhotoPath.isNotEmpty()){
+                    val file = File(currentPhotoPath)
+                    file.delete()
+                    currentPhotoPath = ""
+                    context?.toast(getString(R.string.failed_to_capture_image))
+                }
+            }
+        }
+    }
+
     private fun onClick() {
         binding?.fabGetCurrentLocation?.setOnClickListener {
             goToCurrentLocation()
@@ -139,7 +172,42 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
     }
 
     private fun openCamera() {
+        context?.let { context ->
+            val cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+            if (cameraIntent.resolveActivity(context.packageManager) != null){
+                val photoFile = try {
+                    createImageFile()
+                }catch (ex: IOException){
+                    null
+                }
+                photoFile?.also {
+                    val photoUri = FileProvider.getUriForFile(
+                        context,
+                        BuildConfig.APPLICATION_ID + ".fileprovider",
+                        it
+                    )
+                    cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri)
+                    startActivityForResult(cameraIntent, REQUEST_CODE_IMAGE_CAPTURE)
+                }
+            }
+        }
     }
+
+    @Throws(IOException::class)
+    private fun createImageFile(): File {
+        // Create an image file name
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val storageDir = context?.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+        return File.createTempFile(
+            "JPEG_${timeStamp}_", /* prefix */
+            ".jpg", /* suffix */
+            storageDir /* directory */
+        ).apply {
+            // Save a file: path for use with ACTION_VIEW intents
+            currentPhotoPath = absolutePath
+        }
+    }
+
 
     private fun init() {
         //Setup Location
