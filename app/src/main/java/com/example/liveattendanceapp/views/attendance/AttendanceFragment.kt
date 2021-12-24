@@ -49,8 +49,6 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
 
     companion object{
         private const val REQUEST_CODE_LOCATION = 2000
-        private const val REQUEST_CODE_CAMERA_PERMISSIONS = 1001
-        private const val REQUEST_CODE_IMAGE_CAPTURE = 1000
         private val TAG = AttendanceFragment::class.java.simpleName
     }
 
@@ -102,6 +100,23 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         }
     }
 
+    private var launchCamera = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            if (currentPhotoPath.isNotEmpty()){
+            val uri = Uri.parse(currentPhotoPath)
+            bindingBottomSheet?.ivCapturePhoto?.setImageURI(uri)
+            bindingBottomSheet?.ivCapturePhoto?.adjustViewBounds = true
+        }
+        }else{
+            if (currentPhotoPath.isNotEmpty()){
+                val file = File(currentPhotoPath)
+                file.delete()
+                currentPhotoPath = ""
+                context?.toast(getString(R.string.failed_to_capture_image))
+            }
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -116,45 +131,14 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         binding = null
         bindingBottomSheet = null
         stopLocationUpdates()
+        deletePhoto()
     }
-
-//    override fun onDestroy() {
-//        super.onDestroy()
-//        if (currentLocation != null){
-//            fusedLocationProviderClient.removeLocationUpdates(locationCallback)
-//        }
-//    }
-//
-//    override fun onPause() {
-//        super.onPause()
-//        stopLocationUpdates()
-//    }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupMaps()
         init()
         onClick()
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_CODE_IMAGE_CAPTURE){
-            if (resultCode == RESULT_OK){
-                if (currentPhotoPath.isNotEmpty()){
-                    val uri = Uri.parse(currentPhotoPath)
-                    bindingBottomSheet?.ivCapturePhoto?.setImageURI(uri)
-                    bindingBottomSheet?.ivCapturePhoto?.adjustViewBounds = true
-                }
-            }else{
-                if (currentPhotoPath.isNotEmpty()){
-                    val file = File(currentPhotoPath)
-                    file.delete()
-                    currentPhotoPath = ""
-                    context?.toast(getString(R.string.failed_to_capture_image))
-                }
-            }
-        }
     }
 
     private fun onClick() {
@@ -169,6 +153,11 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
                 setRequestPermissionCamera()
             }
         }
+    }
+
+    private fun deletePhoto(){
+        val file = File(currentPhotoPath)
+        file.delete()
     }
 
     private fun openCamera() {
@@ -187,7 +176,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
                         it
                     )
                     cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri)
-                    startActivityForResult(cameraIntent, REQUEST_CODE_IMAGE_CAPTURE)
+                    launchCamera.launch(cameraIntent)
                 }
             }
         }
