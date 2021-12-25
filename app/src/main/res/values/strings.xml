@@ -41,4 +41,5 @@
     <string name="success_check_in">Success Check In</string>
     <string name="success_check_out">Success Check Out</string>
     <string name="something_wrong">Something Wrong</string>
+    <string name="your_already_present">Your already present</string>
 </resources>

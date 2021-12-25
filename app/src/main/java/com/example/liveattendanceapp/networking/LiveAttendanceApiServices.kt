@@ -2,6 +2,7 @@ package com.example.liveattendanceapp.networking
 
 import com.example.liveattendanceapp.model.AttendanceResponse
 import com.example.liveattendanceapp.model.ForgotPasswordRespone
+import com.example.liveattendanceapp.model.HistoryResponse
 import com.example.liveattendanceapp.model.LoginResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -25,4 +26,11 @@ interface LiveAttendanceApiServices {
                @PartMap params: HashMap<String, RequestBody>,
                @Part photo: MultipartBody.Part
     ): Call<AttendanceResponse>
+
+    @Headers("Accept: application/json")
+    @GET("attendance/history")
+    fun getHistoryAttendance(@Header("Authorization") token: String,
+                             @Query("from") fromDate: String,
+                             @Query("to") toDate: String
+    ): Call<HistoryResponse>
 }
