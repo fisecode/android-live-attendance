@@ -30,6 +30,7 @@ import com.example.liveattendanceapp.BuildConfig
 import com.example.liveattendanceapp.R
 import com.example.liveattendanceapp.databinding.BottomSheetAttendanceBinding
 import com.example.liveattendanceapp.databinding.FragmentAttendanceBinding
+import com.example.liveattendanceapp.date.MyDate
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
@@ -38,6 +39,7 @@ import com.google.android.gms.maps.model.LatLng
 import com.example.liveattendanceapp.dialog.MyDialog
 import com.example.liveattendanceapp.hawkstorage.HawkStorage
 import com.example.liveattendanceapp.model.AttendanceResponse
+import com.example.liveattendanceapp.model.HistoryResponse
 import com.example.liveattendanceapp.networking.ApiServices
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.ResolvableApiException
@@ -50,6 +52,7 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jetbrains.anko.toast
 import retrofit2.Call
+import retrofit2.Callback
 import retrofit2.Response
 import java.io.File
 import java.io.IOException
@@ -147,6 +150,11 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
         deletePhoto()
     }
 
+    override fun onResume() {
+        super.onResume()
+        checkIfAlreadyPresent()
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupMaps()
@@ -228,7 +236,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
             val multipartBody = MultipartBody.Part.createFormData("photo", file.name, requestPhotoFile)
             ApiServices.getLiveAttendanceServices()
                 .attend("Bearer $token", params, multipartBody)
-                .enqueue(object : retrofit2.Callback<AttendanceResponse> {
+                .enqueue(object : Callback<AttendanceResponse> {
                     override fun onResponse(
                         call: Call<AttendanceResponse>,
                         response: Response<AttendanceResponse>
@@ -247,6 +255,7 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
                             }else{
                                 MyDialog.dynamicDialog(context, getString(R.string.success_check_out), attendanceResponse?.message.toString())
                             }
+                            checkIfAlreadyPresent()
                         }else{
                             MyDialog.dynamicDialog(context, getString(R.string.alert), getString(R.string.something_wrong))
                         }
@@ -258,6 +267,51 @@ class AttendanceFragment : Fragment(), OnMapReadyCallback {
                     }
 
                 })
+        }
+    }
+
+    private fun checkIfAlreadyPresent() {
+        val token = HawkStorage.instance(context).getToken()
+        val currentDate = MyDate.getCurrentDateForServer()
+
+        ApiServices.getLiveAttendanceServices()
+            .getHistoryAttendance("Bearer $token", currentDate, currentDate)
+            .enqueue(object : Callback<HistoryResponse> {
+                override fun onResponse(
+                    call: Call<HistoryResponse>,
+                    response: Response<HistoryResponse>
+                ) {
+                    if (response.isSuccessful){
+                        val histories = response.body()?.histories
+                        if (histories != null && histories.isNotEmpty()) {
+                            if (histories[0]?.status == 1) {
+                                isCheckIn = false
+                                checkIsCheckIn()
+                                bindingBottomSheet?.btnCheckIn?.isEnabled = false
+                                bindingBottomSheet?.btnCheckIn?.text =
+                                    getString(R.string.your_already_present)
+                            }else{
+                                isCheckIn = true
+                                checkIsCheckIn()
+                            }
+                        }
+                    }
+                }
+
+                override fun onFailure(call: Call<HistoryResponse>, t: Throwable) {
+                    Log.e(TAG, "Error: ${t.message}")
+                }
+
+            })
+    }
+
+    private fun checkIsCheckIn() {
+        if (isCheckIn){
+            bindingBottomSheet?.btnCheckIn?.background = ContextCompat.getDrawable(requireContext(), R.drawable.bg_check_out)
+            bindingBottomSheet?.btnCheckIn?.text = getString(R.string.check_out)
+        }else{
+            bindingBottomSheet?.btnCheckIn?.background = ContextCompat.getDrawable(requireContext(), R.drawable.bg_button_primary)
+            bindingBottomSheet?.btnCheckIn?.text = getString(R.string.check_in)
         }
     }
 
